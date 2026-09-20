@@ -1,0 +1,20 @@
+# Build artifacts
+build/
+dist/
+*.spec
+__pycache__/
+*.pyc
+
+# Local config (may contain API keys)
+config.json
+
+# Test outputs
+_test_tpl/
+_test_*.docx
+_test_*.py
+_inspect*.py
+_inspect*.txt
+
+# OS
+Thumbs.db
+.DS_Store
