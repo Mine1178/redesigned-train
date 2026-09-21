@@ -90,7 +90,7 @@ _reg(Template(
     rules={
         "title":    Rule(font_cn="黑体", size=22, align="center", space_after=12),
         "subtitle": Rule(font_cn="楷体", size=16, align="center", space_after=18),
-        "h1":       Rule(font_cn="黑体", size=16, align="center",
+        "h1":       Rule(font_cn="黑体", size=16, align="left", indent=2,
                          space_before=24, space_after=18),
         "h2":       Rule(font_cn="黑体", size=14, align="left",
                          space_before=12, space_after=6),
@@ -114,8 +114,8 @@ _reg(Template(
     header_kind="none", footer_kind="page",
     rules={
         "title":    Rule(font_cn="黑体", size=22, align="center", space_after=18),
-        "h1":       Rule(font_cn="黑体", size=14, align="center", space_before=12,
-                         space_after=6),
+        "h1":       Rule(font_cn="黑体", size=14, align="left", indent=2,
+                         space_before=12, space_after=6),
         "h2":       Rule(font_cn="黑体", size=12, bold=True, align="left", indent=0,
                          space_before=6, space_after=3),
         "body":     Rule(font_cn="仿宋", size=12, align="justify", indent=2,
@@ -134,7 +134,7 @@ _reg(Template(
     header_kind="title", footer_kind="page",
     rules={
         "title":    Rule(font_cn="黑体", size=18, align="center", space_after=12),
-        "h1":       Rule(font_cn="黑体", size=16, align="center",
+        "h1":       Rule(font_cn="黑体", size=16, align="left", indent=2,
                          space_before=18, space_after=12),
         "h2":       Rule(font_cn="黑体", size=14, align="left",
                          space_before=12, space_after=6),

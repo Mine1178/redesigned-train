@@ -143,7 +143,7 @@ class App(ctk.CTk):
         self.opt_watermark = ctk.StringVar(value="")
         self.opt_cover = ctk.BooleanVar(value=False)
 
-        # 第一行：导入 + 核心排版动作
+        # 第一行：文件 + 排版
         bar1 = ctk.CTkFrame(f, fg_color="transparent")
         bar1.pack(fill="x", padx=14, pady=(12, 4))
         self._tool_btn(bar1, "📂 导入文档", self._open_doc, compact=True)
@@ -151,30 +151,39 @@ class App(ctk.CTk):
         self._tool_btn(bar1, "🧹 清脏数据", self._clean, fg_color="#e11d48", hover="#be123c", compact=True)
         self._tool_btn(bar1, "🧩 范文", self._open_sample, compact=True)
         self._tool_btn(bar1, "✨ 本地排版", self._run_local,
-                       fg_color="#0f9d58", hover="#0b7a44", compact=True)
+                       fg_color="#16a34a", hover="#15803d", compact=True)
         self._tool_btn(bar1, "🤖 AI 排版", self._run_ai,
-                       fg_color="#7c3aed", hover="#5b21b6", compact=True)
+                       fg_color="#7c3aed", hover="#6d28d9", compact=True)
+        self._tool_btn(bar1, "🔧 原地套模板", self._inplace,
+                       fg_color="#0369a1", hover="#075985", compact=True)
 
-        # 第二行：开关 + 导出动作
+        # 第二行：预览 + 导出 + 工具
         bar2 = ctk.CTkFrame(f, fg_color="transparent")
         bar2.pack(fill="x", padx=14, pady=4)
-        ctk.CTkSwitch(bar2, text="页眉页脚", variable=self.opt_header,
-                      font=ctk.CTkFont(size=12)).pack(side="left", padx=6)
-        ctk.CTkSwitch(bar2, text="自动目录", variable=self.opt_toc,
-                      font=ctk.CTkFont(size=12)).pack(side="left", padx=6)
-        ctk.CTkSwitch(bar2, text="封面", variable=self.opt_cover,
-                      font=ctk.CTkFont(size=12)).pack(side="left", padx=6)
-        ctk.CTkEntry(bar2, textvariable=self.opt_watermark, width=160,
-                     placeholder_text="水印文字（留空不加水印）",
-                     height=28).pack(side="left", padx=6)
-        self._tool_btn(bar2, "🩺 体检", self._qc, fg_color="#64748b", hover="#475569", compact=True)
-        self._tool_btn(bar2, "🧷 清修订", self._strip_rev,
-                       fg_color="#64748b", hover="#475569", compact=True)
+        self._tool_btn(bar2, "👁 排版预览", self._preview,
+                       fg_color="#0e7490", hover="#155e75", compact=True)
         self._tool_btn(bar2, "💾 导出 Word", self._export,
                        fg_color="#d97706", hover="#b45309", compact=True)
-        self._tool_btn(bar2, "🔧 原地套当前模板", self._inplace, fg_color="#0369a1", hover="#075985", compact=True)
         self._tool_btn(bar2, "📄 导出 PDF", self._export_pdf,
                        fg_color="#1d4ed8", hover="#1e40af", compact=True)
+        self._tool_btn(bar2, "🧷 清修订", self._strip_rev,
+                       fg_color="#9333ea", hover="#7e22ce", compact=True)
+        self._tool_btn(bar2, "🩺 体检", self._qc,
+                       fg_color="#059669", hover="#047857", compact=True)
+
+        # 第三行：选项开关
+        bar_sw = ctk.CTkFrame(f, fg_color="transparent")
+        bar_sw.pack(fill="x", padx=14, pady=(0, 8))
+        ctk.CTkSwitch(bar_sw, text="页眉页脚", variable=self.opt_header,
+                      font=ctk.CTkFont(size=12)).pack(side="left", padx=6)
+        ctk.CTkSwitch(bar_sw, text="自动目录", variable=self.opt_toc,
+                      font=ctk.CTkFont(size=12)).pack(side="left", padx=6)
+        ctk.CTkSwitch(bar_sw, text="封面", variable=self.opt_cover,
+                      font=ctk.CTkFont(size=12)).pack(side="left", padx=6)
+        ctk.CTkLabel(bar_sw, text="水印：", font=ctk.CTkFont(size=12)).pack(side="left", padx=(12,0))
+        ctk.CTkEntry(bar_sw, textvariable=self.opt_watermark, width=160,
+                     placeholder_text="水印文字（留空不加水印）",
+                     height=28).pack(side="left", padx=6)
 
         info = ctk.CTkLabel(f, text="当前模板：未选择", anchor="w",
                             font=ctk.CTkFont(size=12, weight="bold"))
@@ -264,7 +273,6 @@ class App(ctk.CTk):
         btns = ctk.CTkFrame(card, fg_color="transparent")
         btns.grid(row=5, column=0, columnspan=2, pady=14)
         ctk.CTkButton(btns, text="🔌 测试连接", command=self._test_conn,
-                      fg_color="#0f9d58", hover_color="#0b7a44",
                       width=120).pack(side="left", padx=8)
         ctk.CTkButton(btns, text="💾 保存配置", command=self._save_cfg,
                       fg_color=PRIMARY, hover_color=PRIMARY_HOVER,
@@ -501,6 +509,7 @@ class App(ctk.CTk):
                 with_toc=self.opt_toc.get(),
                 watermark=self.opt_watermark.get().strip(),
                 cover=cover)
+            self.last_out = path
             self._log(f"✅ 已导出: {path}")
             messagebox.showinfo("完成", f"已导出：\n{path}")
         except Exception as e:
@@ -540,6 +549,29 @@ class App(ctk.CTk):
             messagebox.showinfo("完成", f"已导出：\n{path}")
         except Exception as e:
             messagebox.showerror("导出 PDF 失败", str(e))
+
+    def _preview(self):
+        """用 Word 只读模式打开最近导出的文档，预览排版效果。"""
+        path = self.last_out
+        if not path or not os.path.exists(path):
+            path = self.source_path
+        if not path or not os.path.exists(path):
+            path = filedialog.askopenfilename(
+                title="选择要预览的 docx",
+                filetypes=[("Word", "*.docx")])
+            if not path:
+                return
+        try:
+            import win32com.client as win32
+            word = win32.Dispatch("Word.Application")
+            word.Visible = True
+            word.WindowState = 1  # 最大化
+            doc = word.Documents.Open(os.path.abspath(path), ReadOnly=True,
+                                       AddToRecentFiles=False)
+            doc.ActiveWindow.View.Type = 3  # 页面视图
+            self._log("✅ 已在 Word 中打开预览")
+        except Exception as e:
+            messagebox.showerror("预览失败", str(e))
 
     def _inplace(self):
         """原地套用华通样式：不重建，保留原文档图片/公式。"""

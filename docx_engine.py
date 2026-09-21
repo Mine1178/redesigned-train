@@ -372,11 +372,14 @@ def build_document(blocks, classified, template: Template, out_path,
     normal.font.size = Pt(12)
     normal.element.rPr.rFonts.set(qn("w:eastAsia"), "宋体")
 
-    # 封面（节1：无页码）
+    # 封面（节1：无页眉无页码）
     if cover:
         build_cover(doc, **cover)
+        sec1 = doc.sections[-1]
+        # 清空封面页眉
+        sec1.header.is_linked_to_previous = False
+        sec1.header.paragraphs[0].text = ""
         if page_num:
-            sec1 = doc.sections[-1]
             _set_footer_empty(sec1)
         # 目录分节
         if with_toc:
@@ -413,7 +416,7 @@ def build_document(blocks, classified, template: Template, out_path,
         rule = template.get(ptype)
         p = doc.add_paragraph()
         _apply_paragraph(p, text, rule, ptype)
-        if ptype == "h1" and idx > 0:
+        if ptype == "h1" and idx > 0 and template.tid in ("publish", "thesis", "bidding"):
             p.paragraph_format.page_break_before = True
     # 让 Word 打开文档时自动更新域（目录页码）
     settings = doc.settings.element
