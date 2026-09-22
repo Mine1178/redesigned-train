@@ -121,6 +121,7 @@ _reg(Template(
         "body":     Rule(font_cn="仿宋", size=12, align="justify", indent=2,
                          line_multiple=1.5),
         "table_cell": Rule(font_cn="仿宋", size=10.5, align="center", line_multiple=1.0),
+        "party":    Rule(font_cn="仿宋", size=12, align="left", indent=0, line_multiple=1.5),
         "signoff":  Rule(font_cn="仿宋", size=12, align="right", line_multiple=1.5),
         "note":     Rule(font_cn="宋体", size=10.5, align="left"),
     }))
@@ -195,8 +196,12 @@ _reg(Template(
     header_kind="title", footer_kind="page",
     rules={
         "title":    Rule(font_cn="黑体", size=18, align="center", space_after=12),
-        "h1":       Rule(font_cn="黑体", size=14, align="left", space_before=6,
-                         space_after=3),
+        "h1":       Rule(font_cn="黑体", size=14, align="left", indent=2, space_before=12,
+                         space_after=6, line_multiple=1.5),
+        "h2":       Rule(font_cn="黑体", size=12, align="left", indent=2,
+                         space_before=6, space_after=3, line_multiple=1.5),
+        "h3":       Rule(font_cn="楷体", size=12, bold=True, align="left", indent=2,
+                         line_multiple=1.5),
         "body":     Rule(font_cn="仿宋_GB2312", size=14, align="justify", indent=2,
                          line_multiple=1.5),
         "table_cell": Rule(font_cn="仿宋_GB2312", size=10.5, align="center", line_multiple=1.0),
@@ -213,10 +218,12 @@ _reg(Template(
     header_kind="none", footer_kind="page",
     rules={
         "title":    Rule(font_cn="黑体", size=18, align="center", space_after=6),
+        "subtitle": Rule(font_cn="宋体", size=12, align="center", space_after=12),
         "h1":       Rule(font_cn="黑体", size=14, align="left", space_before=12,
                          space_after=6),
         "h2":       Rule(font_cn="黑体", size=12, bold=True, align="left", indent=0,
                          space_before=6, space_after=3),
+        "h3":       Rule(font_cn="宋体", size=12, bold=True, align="left", indent=0),
         "body":     Rule(font_cn="宋体", size=12, align="justify", indent=0,
                          line_multiple=1.5),
         "table_cell": Rule(font_cn="宋体", size=10.5, align="center", line_multiple=1.0),
@@ -232,7 +239,11 @@ _reg(Template(
     header_kind="title", footer_kind="page",
     rules={
         "title":    Rule(font_cn="黑体", size=16, align="center", space_after=10),
-        "h1":       Rule(font_cn="黑体", size=14, align="left", space_before=6),
+        "h1":       Rule(font_cn="黑体", size=14, align="left", indent=2,
+                         space_before=12, space_after=6),
+        "h2":       Rule(font_cn="黑体", size=12, align="left", indent=2,
+                         space_before=6, space_after=3),
+        "h3":       Rule(font_cn="宋体", size=12, bold=True, align="left", indent=2),
         "body":     _body(size=12, line_multiple=1.5),
         "table_cell": Rule(font_cn="宋体", size=10.5, align="center", line_multiple=1.0),
         "note":     Rule(font_cn="宋体", size=10.5, align="left"),
@@ -255,6 +266,6 @@ HOME_CARDS = [
 TYPE_CN = {
     "title": "大标题", "subtitle": "副标题", "doc_no": "发文字号",
     "h1": "一级标题", "h2": "二级标题", "h3": "三级标题", "h4": "四级标题",
-    "body": "正文", "recipient": "主送机关", "signoff": "落款", "note": "注释",
+    "body": "正文", "recipient": "主送机关", "party": "甲乙方", "signoff": "落款", "note": "注释",
     "table_caption": "表题", "figure_caption": "图题", "table_cell": "表格",
 }

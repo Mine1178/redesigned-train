@@ -1,4 +1,4 @@
-# -*- coding: utf-8 -*-
+﻿# -*- coding: utf-8 -*-
 """docx 排版引擎：
 1) 从 docx/txt 提取纯文本段落
 2) 本地启发式分类段落类型（无网/无 API 也能用）
@@ -12,6 +12,7 @@ from docx.shared import Pt, Cm, RGBColor
 from docx.enum.text import WD_ALIGN_PARAGRAPH, WD_LINE_SPACING
 from docx.enum.section import WD_SECTION
 from docx.oxml.ns import qn
+from docx.oxml import OxmlElement as _OE
 
 from templates import Template, Rule
 
@@ -64,7 +65,6 @@ def extract_blocks(path):
             raw = f.read()
         return [l.rstrip() for l in raw.splitlines()]
 
-    from docx.oxml.ns import qn as _qn
     doc = _open_docx_robust(path)
     body = doc.element.body
     # 建映射：xml 元素 -> python-docx 包装对象
@@ -73,11 +73,11 @@ def extract_blocks(path):
 
     blocks = []
     for child in body.iterchildren():
-        if child.tag == _qn("w:p"):
+        if child.tag == qn("w:p"):
             p = p_map.get(child)
             if p is not None:
                 blocks.append(p.text.strip())
-        elif child.tag == _qn("w:tbl"):
+        elif child.tag == qn("w:tbl"):
             t = t_map.get(child)
             if t is not None:
                 rows = []
@@ -147,6 +147,7 @@ RE_H3_NUM = re.compile(r"^\d+\.\d+(\.\d+)?\s+\S")    # 1.1 / 1.1.1
 RE_H4_PAREN = re.compile(r"^[（(]\d+[）)]")
 RE_DOCNO = re.compile(r"〔\d{4}〕\s*第?\d+\s*号")
 RE_DATE = re.compile(r"^[一二三四五六七八九十〇○0-9]{2,4}\s*年\s*[0-9一二三四五六七八九十]{1,2}\s*月(\s*[0-9一二三四五六七八九十]{1,2}\s*日)?$")
+RE_PARTY = re.compile(r"^(甲方|乙方|丙方|丁方|发包方|承包方|委托方|受托方|买方|卖方|出租方|承租方)[:：]")
 RE_RECIPIENT = re.compile(r"[：:]\s*$")
 RE_SIGNOFF_KW = re.compile(r"(特此(通知|函告|报告|批复|公告|说明|承诺)|^[一二三四五六七八九十]{2,4}公司$|^有限公司$|^设计单位|^建设单位|^编制|^审核|^批准)")
 RE_TABLE_CAPTION = re.compile(r"^(表|图)\s*\d+(\.\d+)*")
@@ -192,6 +193,8 @@ def local_classify(blocks):
             result[idx] = "body"  # （1）（2）是正文中的枚举项，按正文排
         elif k >= len(nonempty) - 3 and (RE_SIGNOFF_KW.search(t) or RE_DATE.match(t)):
             result[idx] = "signoff"
+        elif RE_PARTY.match(t):
+            result[idx] = "party"
         elif RE_RECIPIENT.search(t) and len(t) < 30:
             result[idx] = "recipient"
         elif RE_SHORT_HEADING.match(t) and len(t) <= 12:
@@ -348,11 +351,65 @@ def _set_footer_empty(section):
         run.text = ""
 
 
+from docx.oxml import OxmlElement
+from text_norm import normalize_text, fix_numbering, count_words
+def _build_gongwen_redhead(doc, blocks, classified):
+    """GB/T 9704 公文红头：红色机关名（二号小标宋）+ 红色分隔线。
+    识别正文前的"XX文件"或"XX通知"作为机关名。"""
+    from docx.shared import RGBColor
+    from docx.enum.text import WD_ALIGN_PARAGRAPH
+    # 找前 3 个非空段落作为红头候选
+    title_text = "中 国 联 通 公 司 文 件"
+    doc_no = ""
+    for i, b in enumerate(blocks[:5]):
+        if isinstance(b, list): continue
+        t = b.strip()
+        if not t: continue
+        pt = classified.get(i, "")
+        if pt in ("title",) or (len(t) < 30 and ("文件" in t or "通知" in t or "报告" in t or "请示" in t)):
+            title_text = t
+            classified[i] = "toc_skip"  # 不重复输出
+        elif pt == "doc_no" or (len(t) < 25 and ("发" in t or "号" in t) and any(ch.isdigit() for ch in t)):
+            doc_no = t
+            classified[i] = "toc_skip"
+    # 红头
+    p = doc.add_paragraph()
+    p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    p.paragraph_format.space_before = Pt(20)
+    p.paragraph_format.space_after = Pt(6)
+    r = p.add_run(title_text)
+    r.font.name = "Times New Roman"
+    rPr = r._element.get_or_add_rPr()
+    rFonts = rPr.find(qn("w:rFonts"))
+    if rFonts is None:
+        from docx.oxml import OxmlElement as _OE2
+        rFonts = _OE2("w:rFonts"); rPr.append(rFonts)
+    rFonts.set(qn("w:eastAsia"), "方正小标宋简体")
+    r.font.size = Pt(36)
+    r.font.color.rgb = RGBColor(0xFF, 0x00, 0x00)
+    # 红线
+    p2 = doc.add_paragraph()
+    pPr = p2._p.get_or_add_pPr()
+    pbdr = _OE("w:pBdr")
+    bottom = _OE("w:bottom")
+    bottom.set(qn("w:val"), "single"); bottom.set(qn("w:sz"), "24")
+    bottom.set(qn("w:space"), "1"); bottom.set(qn("w:color"), "FF0000")
+    pbdr.append(bottom); pPr.append(pbdr)
+    p2.paragraph_format.space_after = Pt(18)
+    # 发文字号
+    if doc_no:
+        p3 = doc.add_paragraph()
+        p3.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        set_font(p3.add_run(doc_no), "仿宋_GB2312", 16)
+
+
 def build_document(blocks, classified, template: Template, out_path,
                    header_text="", page_num=True, with_toc=False,
                    watermark="", cover=None, renumber=False):
     if renumber:
         blocks = renumber_figures_tables(blocks)
+    # 文本规范化：中英文加空格、半角转全角
+    blocks = _normalize_blocks(blocks)
     """把 (块序列, 类型字典) 按模板生成 docx。blocks 元素：str 段落 / list 表格。
     可选：页眉、页码、自动目录、水印、封面。"""
     doc = Document()
@@ -402,6 +459,10 @@ def build_document(blocks, classified, template: Template, out_path,
     if watermark:
         add_watermark(doc, watermark)
 
+    # 公文红头：红色机关名 + 红色分隔线
+    if template.tid == "gongwen":
+        _build_gongwen_redhead(doc, blocks, classified)
+
     cell_rule = template.get("table_cell")
     for idx, block in enumerate(blocks):
         if isinstance(block, list):
@@ -432,59 +493,94 @@ def build_document(blocks, classified, template: Template, out_path,
 
 # ---------- 范文样式抽取（导入范文排版） ----------
 def extract_style_signature(path):
-    """读范文 docx，按段落类型聚类得到样式指纹，返回 dict[tpl_tid-like rules]。
-    简化策略：按字号/字体/对齐/缩进聚类，再用启发式命名。
-    """
+    """读范文 docx，深度提取页面/段落/字体/行距/缩进/页眉页脚。"""
     doc = Document(path)
     sig = {"rules": {}}
     buckets = {}
+
+    def _fmt_pf(p):
+        pf = p.paragraph_format
+        line_rule = {}
+        if pf.line_spacing:
+            line_rule["line_multiple"] = float(pf.line_spacing)
+        if pf.space_before:
+            line_rule["space_before"] = pf.space_before.pt
+        if pf.space_after:
+            line_rule["space_after"] = pf.space_after.pt
+        # 首行缩进（按字符近似）
+        if pf.first_line_indent:
+            line_rule["indent_chars"] = round(pf.first_line_indent.pt / 12, 1)
+        return line_rule
+
     for p in doc.paragraphs:
         t = p.text.strip()
-        if not t:
-            continue
+        if not t: continue
         f = p.runs[0].font if p.runs else None
         ea = None
+        bold = False
         if p.runs:
             rPr = p.runs[0]._element.rPr
             rfonts = rPr.find(qn("w:rFonts")) if rPr is not None else None
             ea = rfonts.get(qn("w:eastAsia")) if rfonts is not None else None
+            bold = bool(p.runs[0].bold)
         size = round((f.size.pt if f and f.size else 12), 1)
-        # 过滤异常字号（域代码/空 run）
-        if size < 9 or size > 30:
-            size = 12
+        if size < 9 or size > 36: size = 12
         cn = ea or (f.name if f else "宋体") or "宋体"
         align = p.alignment
-        align_s = {0: "left", 1: "center", 2: "right", 3: "justify",
-                   None: "justify"}.get(int(align) if align is not None else None, "justify")
-        key = (cn, size, align_s)
-        buckets.setdefault(key, []).append(t)
+        align_s = {0:"left",1:"center",2:"right",3:"justify",None:"justify"}.get(int(align) if align is not None else None, "justify")
+        pf_info = _fmt_pf(p)
+        key = (cn, size, align_s, bold)
+        buckets.setdefault(key, []).append((t, pf_info))
 
-    # 把段落数最多的 bucket 当 body；其余按字号降序当 title/h1/h2...
     ordered = sorted(buckets.items(), key=lambda kv: -len(kv[1]))
     rules = {}
     used = set()
     if ordered:
-        (cn, size, align), texts = ordered[0]
-        rules["body"] = Rule(font_cn=cn, size=size, align=align, indent=2, line_multiple=1.5)
-        used.add((cn, size, align))
+        (cn, size, align, bold), items = ordered[0]
+        pf0 = items[0][1]
+        rules["body"] = Rule(
+            font_cn=cn, size=size, align=align, indent=int(pf0.get("indent_chars",2) or 2),
+            line_multiple=pf0.get("line_multiple",1.5),
+            space_before=pf0.get("space_before",0),
+            space_after=pf0.get("space_after",0))
+        used.add((cn, size, align, bold))
     rest = [k for k in buckets if k not in used]
-    rest.sort(key=lambda k: (-k[1], 0 if k[2] == "center" else 1))
+    # 按字号降序：大的是标题
+    rest.sort(key=lambda k: -k[1])
     if rest:
-        cn, size, align = rest[0]
-        rules["title"] = Rule(font_cn=cn, size=size, align=align or "center",
-                              space_before=12, space_after=12, line_multiple=1.5)
-        used.add((cn, size, align))
-    for i, k in enumerate([c for c in rest[1:] if c not in used]):
-        cn, size, align = k
-        rules[f"h{i+1}"] = Rule(font_cn=cn, size=size, align="left", indent=2,
-                                space_before=6, space_after=6, line_multiple=1.5)
-    # 页面：用范文第一节边距
+        cn, size, align, bold = rest[0]
+        items = buckets[rest[0]]
+        pf0 = items[0][1]
+        rules["title"] = Rule(font_cn=cn, size=size, align=align or "center", bold=bold,
+                               space_before=pf0.get("space_before",12),
+                               space_after=pf0.get("space_after",12),
+                               line_multiple=pf0.get("line_multiple",1.5))
+        used.add(rest[0])
+    for i, k in enumerate([c for c in rest if c not in used][:4]):
+        cn, size, align, bold = k
+        items = buckets[k]
+        pf0 = items[0][1]
+        rules[f"h{i+1}"] = Rule(
+            font_cn=cn, size=size, align="left", bold=bold,
+            indent=int(pf0.get("indent_chars",2) or 2),
+            space_before=pf0.get("space_before",6),
+            space_after=pf0.get("space_after",6),
+            line_multiple=pf0.get("line_multiple",1.5))
+    # 页面
     try:
-        s = doc.sections[0]
-        sig["margin"] = (round(s.top_margin.cm, 2), round(s.bottom_margin.cm, 2),
-                         round(s.left_margin.cm, 2), round(s.right_margin.cm, 2))
+        s0 = doc.sections[0]
+        sig["margin"] = (round(s0.top_margin.cm,2), round(s0.bottom_margin.cm,2),
+                         round(s0.left_margin.cm,2), round(s0.right_margin.cm,2))
+        sig["header_dist"] = round(s0.header_distance.cm,2)
+        sig["footer_dist"] = round(s0.footer_distance.cm,2)
     except Exception:
-        sig["margin"] = (2.54, 2.54, 3.0, 2.5)
+        sig["margin"] = (2.54,2.54,3.0,2.5)
+    # 页眉文字
+    try:
+        hdr_text = doc.sections[0].header.paragraphs[0].text.strip()
+        sig["header_text"] = hdr_text
+    except Exception:
+        sig["header_text"] = ""
     sig["rules"] = rules
     return sig
 
@@ -722,3 +818,14 @@ def qc_check(blocks, classified, template):
     issues.append(("OK", f"正文规范：{body_rule.font_cn} {body_rule.size}pt "
                          f"{'固定'+str(body_rule.line_exact)+'磅' if body_rule.line_exact else str(body_rule.line_multiple)+'倍行距'}"))
     return issues
+
+
+def _normalize_blocks(blocks):
+    """对所有段落文本做中英文空格 + 全半角规范化。"""
+    for b in blocks:
+        if isinstance(b, dict):
+            if b.get('text'):
+                b['text'] = normalize_text(b['text'])
+        elif isinstance(b, str):
+            b = normalize_text(b)
+    return blocks

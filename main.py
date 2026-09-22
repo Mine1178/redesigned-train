@@ -18,8 +18,9 @@ from templates import TEMPLATES, HOME_CARDS, TYPE_CN
 
 ctk.set_appearance_mode("light")
 ctk.set_default_color_theme("blue")
+ctk.set_widget_scaling(1.0)
 
-PRIMARY = "#2B6CE6"
+PRIMARY = "#3B82F6"
 PRIMARY_HOVER = "#1E56C4"
 SIDEBAR_BG = "#102A4C"
 CARD_BG = "#ffffff"
@@ -65,9 +66,16 @@ class App(ctk.CTk):
         self.nav_work = self._nav_btn(bar, "📝  排版工作区", lambda: self.show_frame("work"))
         self.nav_set = self._nav_btn(bar, "⚙  设置", lambda: self.show_frame("settings"))
 
+        ctk.CTkButton(bar, text="🌙 深色/浅色", command=self._toggle_theme,
+                      fg_color="#1c3d6b", hover_color="#244b82",
+                      font=ctk.CTkFont(size=12)).pack(fill="x", padx=12, pady=(8,4))
         ctk.CTkLabel(bar, text="v1.0  ·  中网华通格式内置",
                      font=ctk.CTkFont(size=11),
                      text_color="#6b86ad").pack(side="bottom", pady=14)
+
+    def _toggle_theme(self):
+        cur = ctk.AppearanceModeTracker.get_mode()
+        ctk.set_appearance_mode("dark" if cur == 1 else "light")
 
     def _nav_btn(self, parent, text, cmd):
         b = ctk.CTkButton(parent, text=text, command=cmd,
@@ -92,22 +100,57 @@ class App(ctk.CTk):
                      font=ctk.CTkFont(size=14),
                      text_color="#6b7280").grid(row=1, column=0, columnspan=2, pady=(0, 18))
 
+        # 最近文件
+        recent = self.cfg.get("recent_files", [])
+        if recent:
+            ctk.CTkLabel(f, text="🕘 最近文件", anchor="w",
+                         font=ctk.CTkFont(size=13, weight="bold"),
+                         text_color="#555").grid(row=10, column=0, columnspan=2,
+                                                 sticky="w", padx=24, pady=(14,4))
+            for i, fp in enumerate(recent[:5]):
+                if not os.path.exists(fp): continue
+                btn = ctk.CTkButton(f, text=os.path.basename(fp),
+                                    command=lambda x=fp: self._open_path(x),
+                                    anchor="w", fg_color="transparent",
+                                    hover_color="#e2e8f0", text_color="#333")
+                btn.grid(row=11+i, column=0, columnspan=2, sticky="ew",
+                         padx=24, pady=1)
+
         for i, (tid, name, icon) in enumerate(HOME_CARDS):
             r, c = 2 + i // 2, i % 2
             card = self._make_card(f, icon, name, tid)
             card.grid(row=r, column=c, padx=18, pady=10, sticky="nsew")
 
     def _make_card(self, parent, icon, name, tid):
-        card = ctk.CTkFrame(parent, fg_color=PRIMARY if tid != "sample" else "#1658b3",
-                            corner_radius=12, height=110)
+        hot = tid in ("publish", "report")
+        bg = PRIMARY if hot else "#ffffff"
+        fg = "#ffffff" if hot else TEXT_DARK
+        desc = next((d for t, _, _, d in
+                    [(t2, n, i, self._card_desc(t2)) for t2, n, i in HOME_CARDS]
+                    if t == t2), "")
+        card = ctk.CTkFrame(parent, fg_color=bg, corner_radius=10, height=100)
         card.pack_propagate(False)
-        lbl = ctk.CTkLabel(card, text=f"{icon}   {name}",
-                           font=ctk.CTkFont(size=17, weight="bold"),
-                           text_color="#ffffff")
-        lbl.pack(expand=True)
-        for w in (card, lbl):
+        ctk.CTkLabel(card, text=f"{icon}  {name}",
+                     font=ctk.CTkFont(size=16, weight="bold"),
+                     text_color=fg).pack(anchor="w", padx=16, pady=(14, 0))
+        ctk.CTkLabel(card, text=desc, font=ctk.CTkFont(size=11),
+                     text_color="#ffffff" if hot else "#6b7280").pack(anchor="w", padx=16)
+        for w in card.winfo_children():
             w.bind("<Button-1>", lambda e, t=tid: self._pick(t))
+        card.bind("<Button-1>", lambda e, t=tid: self._pick(t))
         return card
+
+    def _card_desc(self, tid):
+        return {
+            "publish": "一阶段设计/商务技术文件",
+            "report": "工作总结/汇报/可研",
+            "contract": "协议/合同/补充协议",
+            "thesis": "毕业论文/期刊投稿",
+            "bidding": "投标函/技术标/商务标",
+            "gongwen": "通知/报告/请示",
+            "exam": "试题/试卷/作业",
+            "sample": "按范文样式复刻",
+        }.get(tid, "")
 
     def _pick(self, tid):
         if tid == "sample":
@@ -147,29 +190,28 @@ class App(ctk.CTk):
         bar1 = ctk.CTkFrame(f, fg_color="transparent")
         bar1.pack(fill="x", padx=14, pady=(12, 4))
         self._tool_btn(bar1, "📂 导入文档", self._open_doc, compact=True)
-        self._tool_btn(bar1, "📚 批量", self._batch_layout, fg_color="#0891b2", hover="#0e7490", compact=True)
-        self._tool_btn(bar1, "🧹 清脏数据", self._clean, fg_color="#e11d48", hover="#be123c", compact=True)
-        self._tool_btn(bar1, "🧩 范文", self._open_sample, compact=True)
+        self._tool_btn(bar1, "📚 批量", self._batch_layout, fg_color="#64748b", hover="#475569", compact=True)
+        self._tool_btn(bar1, "🧹 清脏数据", self._clean, fg_color="#64748b", hover="#475569", compact=True)
         self._tool_btn(bar1, "✨ 本地排版", self._run_local,
                        fg_color="#16a34a", hover="#15803d", compact=True)
         self._tool_btn(bar1, "🤖 AI 排版", self._run_ai,
                        fg_color="#7c3aed", hover="#6d28d9", compact=True)
         self._tool_btn(bar1, "🔧 原地套模板", self._inplace,
-                       fg_color="#0369a1", hover="#075985", compact=True)
+                       fg_color="#64748b", hover="#475569", compact=True)
 
         # 第二行：预览 + 导出 + 工具
         bar2 = ctk.CTkFrame(f, fg_color="transparent")
         bar2.pack(fill="x", padx=14, pady=4)
         self._tool_btn(bar2, "👁 排版预览", self._preview,
-                       fg_color="#0e7490", hover="#155e75", compact=True)
+                       fg_color=PRIMARY, hover=PRIMARY_HOVER, compact=True)
         self._tool_btn(bar2, "💾 导出 Word", self._export,
                        fg_color="#d97706", hover="#b45309", compact=True)
         self._tool_btn(bar2, "📄 导出 PDF", self._export_pdf,
                        fg_color="#1d4ed8", hover="#1e40af", compact=True)
         self._tool_btn(bar2, "🧷 清修订", self._strip_rev,
-                       fg_color="#9333ea", hover="#7e22ce", compact=True)
+                       fg_color="#64748b", hover="#475569", compact=True)
         self._tool_btn(bar2, "🩺 体检", self._qc,
-                       fg_color="#059669", hover="#047857", compact=True)
+                       fg_color="#64748b", hover="#475569", compact=True)
 
         # 第三行：选项开关
         bar_sw = ctk.CTkFrame(f, fg_color="transparent")
@@ -177,6 +219,8 @@ class App(ctk.CTk):
         ctk.CTkSwitch(bar_sw, text="页眉页脚", variable=self.opt_header,
                       font=ctk.CTkFont(size=12)).pack(side="left", padx=6)
         ctk.CTkSwitch(bar_sw, text="自动目录", variable=self.opt_toc,
+                      font=ctk.CTkFont(size=12)).pack(side="left", padx=6)
+        ctk.CTkSwitch(bar_sw, text="自动编号", variable=self.opt_fixnum,
                       font=ctk.CTkFont(size=12)).pack(side="left", padx=6)
         ctk.CTkSwitch(bar_sw, text="封面", variable=self.opt_cover,
                       font=ctk.CTkFont(size=12)).pack(side="left", padx=6)
@@ -192,8 +236,8 @@ class App(ctk.CTk):
 
         body = ctk.CTkFrame(f, fg_color="transparent")
         body.pack(fill="both", expand=True, padx=12, pady=8)
-        body.grid_columnconfigure(0, weight=3)
-        body.grid_columnconfigure(1, weight=2)
+        body.grid_columnconfigure(0, weight=2)
+        body.grid_columnconfigure(1, weight=1)
         body.grid_rowconfigure(0, weight=1)
 
         self.preview = ctk.CTkTextbox(body, wrap="word", font=ctk.CTkFont("微软雅黑", 13))
@@ -204,15 +248,23 @@ class App(ctk.CTk):
         self.preview.tag_config("signoff", foreground="#0f9d58")
         self.preview.tag_config("note", foreground="#6b7280")
 
-        self.log = ctk.CTkTextbox(body, wrap="word", font=ctk.CTkFont("微软雅黑", 12),
+        log_wrap = ctk.CTkFrame(body, fg_color="transparent")
+        log_wrap.grid(row=0, column=1, sticky="nsew", padx=(6, 0))
+        ctk.CTkLabel(log_wrap, text="操作日志", font=ctk.CTkFont(size=11, weight="bold"),
+                     text_color="#6b7280").pack(anchor="w", pady=(0, 2))
+        self.log = ctk.CTkTextbox(log_wrap, wrap="word", font=ctk.CTkFont("微软雅黑", 12),
                                   fg_color="#ffffff")
-        self.log.grid(row=0, column=1, sticky="nsew")
+        self.log.pack(fill="both", expand=True)
         self.log.configure(state="disabled")
+        # 底部状态栏
+        self.status = ctk.CTkLabel(f, text="就绪", anchor="w",
+                                    font=ctk.CTkFont(size=11), text_color="#666")
+        self.status.pack(fill="x", padx=14, pady=(0, 6))
 
     def _tool_btn(self, parent, text, cmd, fg_color=PRIMARY, hover=PRIMARY_HOVER, compact=False):
-        h = 32 if compact else 36
-        sz = 12 if compact else 13
-        w = 110 if compact else 130
+        h = 34
+        sz = 12
+        w = 108
         b = ctk.CTkButton(parent, text=text, command=cmd, fg_color=fg_color,
                           hover_color=hover, corner_radius=8, height=h, width=w,
                           font=ctk.CTkFont(size=sz, weight="bold"))
@@ -366,36 +418,7 @@ class App(ctk.CTk):
             filetypes=[("支持格式", "*.docx *.txt"), ("Word", "*.docx"), ("文本", "*.txt")])
         if not path:
             return
-        try:
-            self.blocks = docx_engine.extract_paragraphs(path)
-            self.source_path = path
-            self.classified = {}
-            n_para = sum(1 for b in self.blocks if isinstance(b, str))
-            n_tab = sum(1 for b in self.blocks if isinstance(b, list))
-            self._log(f"已载入 {os.path.basename(path)}：{n_para} 段、{n_tab} 个表格。")
-            # 记录最近文件
-            rf = [path] + [f for f in self.cfg.get("recent_files", []) if f != path][:5]
-            self.cfg["recent_files"] = rf
-            config_manager.save_config(self.cfg)
-            self._render_preview()
-        except Exception as e:
-            messagebox.showerror("打开失败", str(e))
-
-    def _open_sample(self):
-        self._pick("sample")
-
-    # ---------- 第一波新功能 ----------
-    def _clean(self):
-        if not self.blocks:
-            messagebox.showinfo("提示", "请先导入文档。")
-            return
-        self.blocks, report = docx_engine.clean_blocks(self.blocks)
-        self.classified = {}
-        for r in report:
-            self._log("🧹 " + r)
-        if not report:
-            self._log("🧹 未发现脏数据。")
-        self._render_preview()
+        self._open_path(path)
 
     def _batch_layout(self):
         """批量：多选 docx，逐个套用当前模板后导出到同目录 _已排版.docx。"""
@@ -405,7 +428,10 @@ class App(ctk.CTk):
         if not files:
             return
         ok, fail = 0, 0
-        for fp in files:
+        total = len(files)
+        self._log(f"开始批量处理 {total} 个文件...")
+        for i, fp in enumerate(files, 1):
+            self._log(f"[{i}/{total}] 处理 {os.path.basename(fp)}")
             try:
                 blocks = docx_engine.extract_paragraphs(fp)
                 cls = docx_engine.local_classify(blocks)
@@ -418,6 +444,12 @@ class App(ctk.CTk):
                     watermark=self.opt_watermark.get().strip())
                 ok += 1
                 self._log(f"✅ {os.path.basename(fp)} -> {os.path.basename(out)}")
+                try:
+                    pdf = os.path.splitext(out)[0] + ".pdf"
+                    docx_engine.docx_to_pdf(out, pdf)
+                    self._log(f"   📄 PDF: {os.path.basename(pdf)}")
+                except Exception as e:
+                    self._log(f"   ⚠ PDF 失败: {e}")
             except Exception as e:
                 fail += 1
                 self._log(f"❌ {os.path.basename(fp)}: {e}")
@@ -511,6 +543,8 @@ class App(ctk.CTk):
                 cover=cover)
             self.last_out = path
             self._log(f"✅ 已导出: {path}")
+            try: os.startfile(path)
+            except: pass
             messagebox.showinfo("完成", f"已导出：\n{path}")
         except Exception as e:
             messagebox.showerror("导出失败", str(e))
@@ -550,26 +584,59 @@ class App(ctk.CTk):
         except Exception as e:
             messagebox.showerror("导出 PDF 失败", str(e))
 
-    def _preview(self):
-        """用 Word 只读模式打开最近导出的文档，预览排版效果。"""
-        path = self.last_out
-        if not path or not os.path.exists(path):
-            path = self.source_path
-        if not path or not os.path.exists(path):
-            path = filedialog.askopenfilename(
-                title="选择要预览的 docx",
-                filetypes=[("Word", "*.docx")])
-            if not path:
-                return
+    def _clean_spaces(self):
+        if not getattr(self, "blocks", None): return
+        from text_norm import clean_spaces
+        n = 0
+        for i, b in enumerate(self.blocks):
+            if isinstance(b, str):
+                new = clean_spaces(b)
+                if new != b:
+                    self.blocks[i] = new; n += 1
+        self._log(f"🧼 已清理 {n} 段中的多余空格")
+
+    def _remove_blanks(self):
+        if not getattr(self, "blocks", None): return
+        from text_norm import remove_blank_paragraphs
+        before = len(self.blocks)
+        self.blocks = remove_blank_paragraphs(self.blocks)
+        self._log(f"📄 已删除 {before - len(self.blocks)} 个空段")
+
+    def _update_toc(self):
+        """用 Word COM 更新目录域。"""
+        if not self.last_out or not os.path.exists(self.last_out):
+            messagebox.showinfo("提示", "请先导出 Word")
+            return
         try:
             import win32com.client as win32
-            word = win32.Dispatch("Word.Application")
-            word.Visible = True
-            word.WindowState = 1  # 最大化
-            doc = word.Documents.Open(os.path.abspath(path), ReadOnly=True,
-                                       AddToRecentFiles=False)
-            doc.ActiveWindow.View.Type = 3  # 页面视图
-            self._log("✅ 已在 Word 中打开预览")
+            word = win32.DispatchEx("Word.Application")
+            word.Visible = False
+            doc = word.Documents.Open(os.path.abspath(self.last_out))
+            doc.Fields.Update()
+            doc.Save()
+            doc.Close(False)
+            word.Quit()
+            self._log("🔄 目录已更新")
+        except Exception as e:
+            messagebox.showerror("更新失败", str(e))
+
+    def _preview(self):
+        """软件内置预览：生成临时 PDF → 渲染图片 → 弹窗浏览。"""
+        if not getattr(self, "blocks", None):
+            messagebox.showinfo("提示", "请先导入文档并排版。")
+            return
+        try:
+            from preview_window import preview_in_app
+            cover = None
+            if self.opt_cover.get():
+                cover = {"project_name": self.template.name, "book_no": ""}
+            preview_in_app(
+                self, self.blocks, self.classified, self.template,
+                header_text=getattr(self, "project_name", "") or self.template.name,
+                page_num=self.opt_header.get(),
+                with_toc=self.opt_toc.get(),
+                watermark=self.opt_watermark.get().strip(),
+                cover=cover)
         except Exception as e:
             messagebox.showerror("预览失败", str(e))
 
