@@ -125,9 +125,7 @@ class App(ctk.CTk):
         hot = tid in ("publish", "report")
         bg = PRIMARY if hot else "#ffffff"
         fg = "#ffffff" if hot else TEXT_DARK
-        desc = next((d for t, _, _, d in
-                    [(t2, n, i, self._card_desc(t2)) for t2, n, i in HOME_CARDS]
-                    if t == t2), "")
+        desc = self._card_desc(tid)
         card = ctk.CTkFrame(parent, fg_color=bg, corner_radius=10, height=100)
         card.pack_propagate(False)
         ctk.CTkLabel(card, text=f"{icon}  {name}",
@@ -583,6 +581,18 @@ class App(ctk.CTk):
             messagebox.showinfo("完成", f"已导出：\n{path}")
         except Exception as e:
             messagebox.showerror("导出 PDF 失败", str(e))
+
+    def _clean(self):
+        """清脏数据：删除多余空行和格式异常。"""
+        if not getattr(self, "blocks", None):
+            messagebox.showinfo("提示", "请先导入文档。")
+            return
+        from text_norm import remove_blank_paragraphs, clean_spaces
+        before = len(self.blocks)
+        self.blocks = [clean_spaces(b) if isinstance(b, str) else b for b in self.blocks]
+        self.blocks = remove_blank_paragraphs(self.blocks)
+        self._log(f"🧹 已清理 {before - len(self.blocks)} 个空段")
+        self._render_preview()
 
     def _clean_spaces(self):
         if not getattr(self, "blocks", None): return
