@@ -282,13 +282,40 @@ def _repeat_header_row(row):
     trPr.append(tblHeader)
 
 
+def _set_table_borders(table, outer_sz="12", inner_sz="4"):
+    """表格级边框：外框粗、内线细。比逐单元格设置更可靠。"""
+    tbl = table._tbl
+    tblPr = tbl.tblPr
+    # 删旧 borders
+    old = tblPr.find(qn("w:tblBorders"))
+    if old is not None:
+        tblPr.remove(old)
+    borders = tblPr.makeelement(qn("w:tblBorders"), {})
+    # 外框
+    for edge, sz in (("top", outer_sz), ("left", outer_sz),
+                     ("bottom", outer_sz), ("right", outer_sz)):
+        el = borders.makeelement(qn(f"w:{edge}"), {
+            qn("w:val"): "single", qn("w:sz"): sz,
+            qn("w:space"): "0", qn("w:color"): "000000"})
+        borders.append(el)
+    # 内线
+    for edge in ("insideH", "insideV"):
+        el = borders.makeelement(qn(f"w:{edge}"), {
+            qn("w:val"): "single", qn("w:sz"): inner_sz,
+            qn("w:space"): "0", qn("w:color"): "000000"})
+        borders.append(el)
+    tblPr.append(borders)
+
+
 def _add_styled_table(doc, rows_data, cell_rule):
-    """按中网华通规范画表格：全黑单线边框、宋体五号、水平垂直居中、首行表头重复。"""
+    """按华通规范：外框1.5磅(sz=12)、内线0.5磅(sz=4)、表头跨页重复。"""
     if not rows_data:
         return
     ncols = max(len(r) for r in rows_data)
     table = doc.add_table(rows=len(rows_data), cols=ncols)
     table.autofit = True
+    # 表格级边框（一次性设置，最可靠）
+    _set_table_borders(table, outer_sz="12", inner_sz="4")
     for ri, row_data in enumerate(rows_data):
         row = table.rows[ri]
         for ci in range(ncols):
@@ -298,28 +325,19 @@ def _add_styled_table(doc, rows_data, cell_rule):
             p = cell.paragraphs[0]
             run = p.add_run(text)
             _set_run_font(run, cell_rule)
-            # 纯数字右对齐，其他居中
-            _text = row_data[ci] if ci < len(row_data) else ""
             import re as _re_num
-            if _re_num.match(r"^[\d\.,%\s\-]+$", _text.strip()):
+            if _re_num.match(r"^[\d\.,%\s\-]+$", text.strip()):
                 p.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.RIGHT
             else:
                 p.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.CENTER
             p.paragraph_format.space_before = Pt(2)
             p.paragraph_format.space_after = Pt(2)
-            # 垂直居中
             tcPr = cell._tc.get_or_add_tcPr()
             vAlign = tcPr.makeelement(qn("w:vAlign"), {qn("w:val"): "center"})
             tcPr.append(vAlign)
-            # 外框粗线，内线细线
-            is_edge = (ri == 0 or ri == len(rows_data) - 1 or ci == 0 or ci == ncols - 1)
-            _set_cell_border(cell, sz="12" if is_edge else "4")
         if ri == 0:
             _repeat_header_row(row)
-    # 表后空一行
     doc.add_paragraph()
-
-
 
 
 def _add_section_break(doc, start_type="nextPage"):

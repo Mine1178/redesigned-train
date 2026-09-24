@@ -182,6 +182,7 @@ class App(ctk.CTk):
         self.opt_header = ctk.BooleanVar(value=False)
         self.opt_toc = ctk.BooleanVar(value=False)
         self.opt_watermark = ctk.StringVar(value="")
+        self.opt_fixnum = ctk.BooleanVar(value=False)
         self.opt_cover = ctk.BooleanVar(value=False)
 
         # 第一行：文件 + 排版
