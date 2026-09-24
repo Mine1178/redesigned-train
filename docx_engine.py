@@ -308,14 +308,27 @@ def _set_table_borders(table, outer_sz="12", inner_sz="4"):
 
 
 def _add_styled_table(doc, rows_data, cell_rule):
-    """按华通规范：外框1.5磅(sz=12)、内线0.5磅(sz=4)、表头跨页重复。"""
+    """按华通规范：外框1.5磅(sz=12)、内线0.5磅(sz=4)、表头跨页重复、列宽合理。"""
     if not rows_data:
         return
     ncols = max(len(r) for r in rows_data)
     table = doc.add_table(rows=len(rows_data), cols=ncols)
-    table.autofit = True
-    # 表格级边框（一次性设置，最可靠）
+    table.autofit = False
+    # 表格级边框
     _set_table_borders(table, outer_sz="12", inner_sz="4")
+    # 列宽：根据内容估算，首列(序号)窄，中间列均分，末列(备注)窄
+    total_width = Cm(16.0)  # 版心宽度
+    if ncols <= 3:
+        widths = [total_width / ncols] * ncols
+    else:
+        # 首列 ~1.2cm，末列 ~2cm，其余均分
+        first = Cm(1.2)
+        last = Cm(2.0)
+        mid = (total_width - first - last) / (ncols - 2)
+        widths = [first] + [mid] * (ncols - 2) + [last]
+    for ci, w in enumerate(widths):
+        for row in table.rows:
+            row.cells[ci].width = w
     for ri, row_data in enumerate(rows_data):
         row = table.rows[ri]
         for ci in range(ncols):
@@ -332,6 +345,7 @@ def _add_styled_table(doc, rows_data, cell_rule):
                 p.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.CENTER
             p.paragraph_format.space_before = Pt(2)
             p.paragraph_format.space_after = Pt(2)
+            p.paragraph_format.line_spacing = 1.0
             tcPr = cell._tc.get_or_add_tcPr()
             vAlign = tcPr.makeelement(qn("w:vAlign"), {qn("w:val"): "center"})
             tcPr.append(vAlign)
