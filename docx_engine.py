@@ -308,27 +308,53 @@ def _set_table_borders(table, outer_sz="12", inner_sz="4"):
 
 
 def _add_styled_table(doc, rows_data, cell_rule):
-    """按华通规范：外框1.5磅(sz=12)、内线0.5磅(sz=4)、表头跨页重复、列宽合理。"""
+    """华通表格规格（最终版）：
+    - 表格水平居中，宽度自适应窗口（100% 版心）
+    - 外框 1.5 磅(sz=12) 全黑，内框 0.5 磅(sz=4) 全黑，无对角线
+    - 宋体五号 10.5pt，西文 Times New Roman
+    - 固定行距 15 磅，单元格上下 2pt / 左右 4pt 内边距
+    - 全部单元格水平+垂直居中，无底纹
+    - 首行表头跨页重复
+    """
     if not rows_data:
         return
     ncols = max(len(r) for r in rows_data)
     table = doc.add_table(rows=len(rows_data), cols=ncols)
-    table.autofit = False
+    table.autofit = True
+
+    # 表格在页面水平居中
+    tblPr = table._tbl.tblPr
+    jc = tblPr.find(qn("w:jc"))
+    if jc is None:
+        jc = tblPr.makeelement(qn("w:jc"), {})
+        tblPr.append(jc)
+    jc.set(qn("w:val"), "center")
+
+    # 表格宽度 = 100% 版心（pct 5000 = 100%）
+    tblW = tblPr.find(qn("w:tblW"))
+    if tblW is None:
+        tblW = tblPr.makeelement(qn("w:tblW"), {})
+        tblPr.append(tblW)
+    tblW.set(qn("w:w"), "5000")
+    tblW.set(qn("w:type"), "pct")
+
     # 表格级边框
     _set_table_borders(table, outer_sz="12", inner_sz="4")
-    # 列宽：根据内容估算，首列(序号)窄，中间列均分，末列(备注)窄
-    total_width = Cm(16.0)  # 版心宽度
-    if ncols <= 3:
-        widths = [total_width / ncols] * ncols
-    else:
-        # 首列 ~1.2cm，末列 ~2cm，其余均分
-        first = Cm(1.2)
-        last = Cm(2.0)
-        mid = (total_width - first - last) / (ncols - 2)
-        widths = [first] + [mid] * (ncols - 2) + [last]
-    for ci, w in enumerate(widths):
-        for row in table.rows:
-            row.cells[ci].width = w
+
+    # 单元格内边距（tblCellMar：上下 2pt=40twips，左右 4pt=80twips）
+    tblCellMar = tblPr.find(qn("w:tblCellMar"))
+    if tblCellMar is None:
+        tblCellMar = tblPr.makeelement(qn("w:tblCellMar"), {})
+        tblPr.append(tblCellMar)
+    for side, w in (("top", "40"), ("bottom", "40"),
+                    ("left", "80"), ("right", "80")):
+        m = tblCellMar.find(qn(f"w:{side}"))
+        if m is None:
+            m = tblCellMar.makeelement(qn(f"w:{side}"), {})
+            tblCellMar.append(m)
+        m.set(qn("w:w"), w)
+        m.set(qn("w:type"), "dxa")
+
     for ri, row_data in enumerate(rows_data):
         row = table.rows[ri]
         for ci in range(ncols):
@@ -337,18 +363,33 @@ def _add_styled_table(doc, rows_data, cell_rule):
             cell.text = ""
             p = cell.paragraphs[0]
             run = p.add_run(text)
-            _set_run_font(run, cell_rule)
-            import re as _re_num
-            if _re_num.match(r"^[\d\.,%\s\-]+$", text.strip()):
-                p.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.RIGHT
-            else:
-                p.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.CENTER
-            p.paragraph_format.space_before = Pt(2)
-            p.paragraph_format.space_after = Pt(2)
-            p.paragraph_format.line_spacing = 1.0
+            # 强制宋体五号 10.5pt，西文 TNR
+            run.font.size = Pt(10.5)
+            run.font.name = "Times New Roman"
+            rPr = run._element.get_or_add_rPr()
+            rFonts = rPr.find(qn("w:rFonts"))
+            if rFonts is None:
+                rFonts = rPr.makeelement(qn("w:rFonts"), {})
+                rPr.append(rFonts)
+            rFonts.set(qn("w:eastAsia"), "宋体")
+            rFonts.set(qn("w:ascii"), "Times New Roman")
+            rFonts.set(qn("w:hAnsi"), "Times New Roman")
+            # 全部水平居中
+            p.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.CENTER
+            p.paragraph_format.space_before = Pt(0)
+            p.paragraph_format.space_after = Pt(0)
+            p.paragraph_format.line_spacing = Pt(15)
+            # 垂直居中
             tcPr = cell._tc.get_or_add_tcPr()
-            vAlign = tcPr.makeelement(qn("w:vAlign"), {qn("w:val"): "center"})
-            tcPr.append(vAlign)
+            vAlign = tcPr.find(qn("w:vAlign"))
+            if vAlign is None:
+                vAlign = tcPr.makeelement(qn("w:vAlign"), {})
+                tcPr.append(vAlign)
+            vAlign.set(qn("w:val"), "center")
+            # 清除底纹
+            shd = tcPr.find(qn("w:shd"))
+            if shd is not None:
+                tcPr.remove(shd)
         if ri == 0:
             _repeat_header_row(row)
     doc.add_paragraph()
